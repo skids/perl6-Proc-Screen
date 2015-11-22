@@ -3,7 +3,10 @@ unit class Proc::Screen is Proc::Async;
 use File::Temp;
 
 my %tokill;
-my Lock $tokill_lock = Lock.new;
+my Lock $tokill_lock;
+BEGIN { # Because --doc runs END }
+  $tokill_lock = Lock.new;
+}
 # TODO: make this a rw proxy that does a fixup on %tokill
 has $.remain = False; # Leave the session running after we exit
 
