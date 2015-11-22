@@ -107,8 +107,8 @@ method await-ready (::?CLASS:D:) {
   # Wait for it to send us its PID, if we are just starting now.
   if $!screen-pid ~~ Promise {
     await Promise.anyof($!screen-pid, Promise.in(5));
-    fail "Screen session never sent PID"
-      unless $!screen-pid.result.WHAT.^name eq "Change";
+  fail "Screen session never sent PID"
+      unless $!screen-pid.result.WHAT === IO::Notification::Change;
     $!screen-pid = $!pidfh.slurp-rest;
     self.clean-old-files;
     $tokill_lock.protect: {
