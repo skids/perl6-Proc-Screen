@@ -1,3 +1,28 @@
+=NAME Proc::Screen:: - create and/or manipulate GNU screen sessions
+
+=begin SYNOPSIS
+=begin code
+
+  use Proc::Screen;
+
+  # Start a new screen session
+  my $s = Proc::Screen.new();
+  $s.start;
+
+  # Send a command to the session (this one dumps a screenshot to a file)
+  $s.command("hardcopy","/tmp/foobar.txt");
+
+  # Query for information about the session syncronously
+  $s.query("info").say;
+
+  # Query for information about the session asyncronously
+  my $out;
+  $s.query("info", :$out).then({ "Screen info: $out".say });
+
+=end code
+=end SYNOPSIS
+
+#| Each instance of Proc::Screen corresponds to one screen "session."
 unit class Proc::Screen is Proc::Async;
 
 use File::Temp;
@@ -42,7 +67,7 @@ has $!pro; # The promise returned by the latest Proc::Async .start
            # or the result thereof.  Keeps track of whether we have
            # an "in flight" screen command.
 
-has $.screen-pid;        # The PID that eventually is used for session naming
+has $.screen-pid; # The PID that eventually is used for session naming
 
 has Str $.sessionname;   # Something to make our sessions stand out
 
@@ -64,6 +89,8 @@ has @.rc; # lines of screenrc stored in a temporary file and passed via -c
 # TODO: serial line tty and "telnet" window types though seriously
 # who uses telnet anymore.
 
+#| Plan a new screen session.  This does not start it.
+#| Except for C<:path> and C<:args> all C<Proc::Async> attributes are accepted
 method new(::?CLASS:U: *%iv) {
   die ":args is not user-settable in Proc::Screen" if %iv<args>:exists;
   %iv<path> = "screen" unless %iv<path>:exists;
@@ -84,7 +111,7 @@ method new(::?CLASS:U: *%iv) {
   nextwith(|%iv);
 }
 
-# Starts the command to start the screen session.  Does not wait.
+#| Starts the command to start the planned screen session.  Does not wait.
 method start (::?CLASS:D:) {
   fail "Tried to .start {self.WHAT.^name} which was already started"
     if $!pro.defined;
@@ -93,6 +120,10 @@ method start (::?CLASS:D:) {
   $!pro = callsame;
 }
 
+#| Waits for "screen" to finish executing.  If the session has just
+#| been started, also waits until its process ID is known.  Note
+#| that this only means the "screen" executable has finished, not
+#| that the session has finished processing any commands that were sent.
 method await-ready (::?CLASS:D:) {
   fail "Must .start {::?CLASS.^name} before using it."
     unless $!pro.defined;
@@ -118,12 +149,10 @@ method await-ready (::?CLASS:D:) {
       %tokill{"$.screen-pid.$.sessionname"} = ( $.path, $.remain );
     }
   }
-
-  # TODO: verify we can see it with a -ls and figure
-  # out what to do if not.
 }
 
-# Clean up the temp files from initialization hackery
+#| Clean up the temp files used when starting a new session.  It is unlikely
+#| to be necessary to run this method manually.
 method clean-old-files (::?CLASS:D:) {
   $!pidfh.?close;
   $!pidfn.IO.unlink with $!pidfn;
@@ -135,6 +164,8 @@ method clean-old-files (::?CLASS:D:) {
   $!rcfn = Nil;
 }
 
+#| Manually destroy a session the same way the garbage collector would.
+#| Should clean everything up, if it has not been already.
 method DESTROY (::?CLASS:D:) {
   $tokill_lock.protect: {
     %tokill{"$.screen-pid.$.sessionname"}:delete
@@ -157,7 +188,8 @@ method DESTROY (::?CLASS:D:) {
   }
 }
 
-# TODO: -p specify window
+#| Send a command to a running session.  Does not wait.  A Promise
+#| is returned, or use await-ready to wait.
 method command(::?CLASS:D: $command, *@args) {
   self.await-ready;
   my $cmd = Proc::Async.new(:$.path,
@@ -170,6 +202,19 @@ method attach(::?CLASS:U: $match) {
   ...
 }
 
+#| Query information from a running session, storing the results
+#| in C<out> as they become available. A C<Promise> is returned,
+#| or use await-ready to wait before looking at the contents of C<:out>.
+multi method query (::?CLASS:D: $command, *@args, :$out! is rw) {
+  self.await-ready;
+  my $cmd = Proc::Async.new(:$.path,
+    :args['-S', "$.screen-pid.$.sessionname", '-Q', $command, |@args], :$out);
+  $cmd.stdout.tap(-> $s { $out ~= $s });
+  $!pro = $cmd.start();
+}
+
+#| If C<:out> is not provided C<.query>, will wait and return a
+#| C<Str> containing the result.
 multi method query (::?CLASS:D: $command, *@args) returns Str {
   self.await-ready;
   my $cmd = Proc::Async.new(:$.path,
@@ -179,14 +224,6 @@ multi method query (::?CLASS:D: $command, *@args) returns Str {
   $!pro = $cmd.start;
   self.await-ready;
   $out;
-}
-
-multi method query (::?CLASS:D: $command, *@args, :$out! is rw) {
-  self.await-ready;
-  my $cmd = Proc::Async.new(:$.path,
-    :args['-S', "$.screen-pid.$.sessionname", '-Q', $command, |@args], :$out);
-  $cmd.stdout.tap(-> $s { $out ~= $s });
-  $!pro = $cmd.start();
 }
 
 # Eventually we may be providing programmatic management of screenrc
