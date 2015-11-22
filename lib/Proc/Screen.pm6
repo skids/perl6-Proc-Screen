@@ -167,9 +167,23 @@ method attach(::?CLASS:U: $match) {
   ...
 }
 
-method query (::?CLASS:D: $command, *@args) returns Str {
-  # TODO: -Q
-  ...
+multi method query (::?CLASS:D: $command, *@args) returns Str {
+  self.await-ready;
+  my $cmd = Proc::Async.new(:$.path,
+    :args['-S', "$.screen-pid.$.sessionname", '-Q', $command, |@args]);
+  my $out;
+  $cmd.stdout.tap(-> $s { $out ~= $s });
+  $!pro = $cmd.start;
+  self.await-ready;
+  $out;
+}
+
+multi method query (::?CLASS:D: $command, *@args, :$out! is rw) {
+  self.await-ready;
+  my $cmd = Proc::Async.new(:$.path,
+    :args['-S', "$.screen-pid.$.sessionname", '-Q', $command, |@args], :$out);
+  $cmd.stdout.tap(-> $s { $out ~= $s });
+  $!pro = $cmd.start();
 }
 
 # Eventually we may be providing programmatic management of screenrc

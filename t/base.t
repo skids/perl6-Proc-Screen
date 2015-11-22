@@ -4,7 +4,7 @@ use File::Temp;
 
 use Test;
 if run "screen", "-ls", :out {
-  plan 8;
+  plan 10;
 }
 else {
   plan 1;
@@ -24,4 +24,10 @@ my ($fn, $fh) = |tempfile;
 $s.command("writebuf", $fn);
 $s.await-ready;
 is $fh.slurp-rest, "OHAI", "Verified .command method is working";
+ok $s.query("info") ~~ /\d+\,\d+/, "Verified sync .query method is working";
+my $o;
+$s.query("info", :out($o));
+$s.await-ready;
+ok $o ~~ /\d+\,\d+/, "Verified async .query method is working";
+
 lives-ok {$s.DESTROY}, "Can DESTROY by hand";
