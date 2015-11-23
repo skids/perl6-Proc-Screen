@@ -91,7 +91,7 @@ has @.rc; # lines of screenrc stored in a temporary file and passed via -c
 
 #| Plan a new screen session.  This does not start it.
 #| Except for C<:path> and C<:args> all C<Proc::Async> attributes are accepted
-method new(::?CLASS:U: *%iv) {
+method new(::?CLASS:U: *%iv is copy) {
   die ":args is not user-settable in Proc::Screen" if %iv<args>:exists;
   %iv<path> = "screen" unless %iv<path>:exists;
   %iv<sessionname> //= "Proc::Screen";
@@ -100,7 +100,7 @@ method new(::?CLASS:U: *%iv) {
   # XXX File::Temp might want to consider GLRization of return values
   %iv<rcfn rcfh pidfn pidfh> = |tempfile, |tempfile;
 
-  %iv<rc> = ("source " ~ ::?CLASS.screenrc(),); 
+  %iv<rc> //= ("source " ~ ::?CLASS.screenrc(),);
  
   # Inject commands to get the PID, so we can match the session
   %iv<rcfh>.print(sprintf(Q:to<EORC>, %iv<pidfn>, %iv<rc>.join("\n")));
@@ -116,7 +116,20 @@ method start (::?CLASS:D:) {
   fail "Tried to .start {self.WHAT.^name} which was already started"
     if $!pro.defined;
   # Begin to watch the file where the PID will get dumped.
-  $!screen-pid = $!pidfh.watch.Promise;
+  $!screen-pid = $!pidfh.watch.Promise.then: -> $res {
+    if $res.result.WHAT === IO::Notification::Change {
+      $!screen-pid = $!pidfh.slurp-rest;
+      self.clean-old-files;
+      if $!screen-pid.chars {
+        $tokill_lock.protect: {
+          %tokill{"$!screen-pid.$.sessionname"} = ( $.path, $.remain );
+        }
+      }
+    }
+    else {
+      die("Did not expect this");
+    }
+  }
   $!pro = callsame;
 }
 
@@ -139,21 +152,20 @@ method await-ready (::?CLASS:D:) {
     unless $!pro ~~ Proc;
 
   # Wait for it to send us its PID, if we are just starting now.
-  if $!screen-pid ~~ Promise {
-    await Promise.anyof($!screen-pid, Promise.in(5));
-  fail "Screen session never sent PID"
-      unless $!screen-pid.result.WHAT === IO::Notification::Change;
-    $!screen-pid = $!pidfh.slurp-rest;
-    self.clean-old-files;
-    $tokill_lock.protect: {
-      %tokill{"$.screen-pid.$.sessionname"} = ( $.path, $.remain );
-    }
+  my $pid = $!screen-pid;
+  if $pid ~~ Promise {
+    await Promise.anyof($pid, Promise.in(5));
+    fail "Screen session never sent PID"
+      unless $!screen-pid.WHAT === Str and $!screen-pid.chars;
   }
+  True;
 }
 
 #| Clean up the temp files used when starting a new session.  It is unlikely
 #| to be necessary to run this method manually.
 method clean-old-files (::?CLASS:D:) {
+  # File::Temp may have done this already or it may get run twice,
+  # so hopefully nothing in here blows up if run redundantly.
   $!pidfh.?close;
   $!pidfn.IO.unlink with $!pidfn;
   $!pidfh = Nil;
@@ -164,22 +176,46 @@ method clean-old-files (::?CLASS:D:) {
   $!rcfn = Nil;
 }
 
+# TODO: File::Temp cleans up during END, and according to specs DESTROY
+# may run after that.  If a session is created and then destroyed while
+# starting things might get messy, but we'll hold off fixing that until the
+# dust settles around destruction/File::Temp.
+
 #| Manually destroy a session the same way the garbage collector would.
-#| Should clean everything up, if it has not been already.
+#| Should clean everything up, if it has not been already.  Even when calling
+#| this manually, C<.remain> will still protect the session, so it must be
+#! adjusted according to intent.
 method DESTROY (::?CLASS:D:) {
   $tokill_lock.protect: {
-    %tokill{"$.screen-pid.$.sessionname"}:delete
+    %tokill{"$!screen-pid.$.sessionname"}:delete
   }
   if $!pro.defined {
     unless $!remain {
-      # This is orderly run-time destruction, so in case it is still
-      # being created in another thread, let it finish starting and
-      # then shut it down in a civil manner.
-      self.command("quit");
-      # JIC run a wipe.
-      # XXX this complains in the normal case due to exit code, skip for now
-      # run $.path, '-q', '-wipe', "$.screen-pid.$.sessionname";
-      # TODO: need to handle any zombie weirdness?
+      if $!screen-pid ~~ Promise {
+        # It was created but the PID was never harvested.
+        # Since we may be on a countdown to process termination,
+        # we can't really sit around waiting.  Just schedule
+        # a handler and hope.
+        $!screen-pid.then: {
+          if $!screen-pid.chars and not $!remain {
+            run $.path, '-q', '-S', "$!screen-pid.$.sessionname", '-X', 'quit'
+          }
+        }
+      }
+      else {
+        # This is orderly run-time destruction, so in case it is still
+        # being created in another thread, let it finish starting and
+        # then shut it down in a civil manner.
+        self.command("quit");
+        # That may have repopulated %tokill, so delete again.
+        $tokill_lock.protect: {
+          %tokill{"$!screen-pid.$.sessionname"}:delete
+        }
+        # JIC run a wipe.
+        # XXX this complains in the normal case due to exit code, skip for now
+        # run $.path, '-q', '-wipe', "$!screen-pid.$.sessionname";
+        # TODO: need to handle any zombie weirdness?
+      }
     }
   }
   else {
@@ -193,7 +229,7 @@ method DESTROY (::?CLASS:D:) {
 method command(::?CLASS:D: $command, *@args) {
   self.await-ready;
   my $cmd = Proc::Async.new(:$.path,
-    :args['-q', '-S', "$.screen-pid.$.sessionname", '-X', $command, |@args]);
+    :args['-q', '-S', "$!screen-pid.$.sessionname", '-X', $command, |@args]);
   $!pro = $cmd.start();
 }
 
@@ -208,7 +244,7 @@ method attach(::?CLASS:U: $match) {
 multi method query (::?CLASS:D: $command, *@args, :$out! is rw) {
   self.await-ready;
   my $cmd = Proc::Async.new(:$.path,
-    :args['-S', "$.screen-pid.$.sessionname", '-Q', $command, |@args], :$out);
+    :args['-S', "$!screen-pid.$.sessionname", '-Q', $command, |@args], :$out);
   $cmd.stdout.tap(-> $s { $out ~= $s });
   $!pro = $cmd.start();
 }
@@ -218,7 +254,7 @@ multi method query (::?CLASS:D: $command, *@args, :$out! is rw) {
 multi method query (::?CLASS:D: $command, *@args) returns Str {
   self.await-ready;
   my $cmd = Proc::Async.new(:$.path,
-    :args['-S', "$.screen-pid.$.sessionname", '-Q', $command, |@args]);
+    :args['-S', "$!screen-pid.$.sessionname", '-Q', $command, |@args]);
   my $out;
   $cmd.stdout.tap(-> $s { $out ~= $s });
   $!pro = $cmd.start;
