@@ -86,6 +86,10 @@ method screenrc(::?CLASS:U:) {
 }
 has @.rc; # lines of screenrc stored in a temporary file and passed via -c
 
+# The command to pass as the shell on the screen commandline
+# ("shell" in @.rc can also be used but does not take arguments.)
+has @.shell;
+
 # TODO: serial line tty and "telnet" window types though seriously
 # who uses telnet anymore.
 
@@ -107,7 +111,8 @@ method new(::?CLASS:U: *%iv is copy) {
     eval 'register . "$PID"' 'writebuf %s' 'register . ""'
     %s
     EORC
-  %iv<args> = [ '-q', '-c', %iv<rcfn>, '-S', %iv<sessionname>, '-d', '-m' ];
+  %iv<args> = [ '-q', '-c', %iv<rcfn>, '-S', %iv<sessionname>,
+                '-d', '-m', |(%iv<shell> with %iv<shell>) ];
   nextwith(|%iv);
 }
 

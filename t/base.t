@@ -4,7 +4,7 @@ use File::Temp;
 
 use Test;
 if run "screen", "-ls", :out {
-  plan 10;
+  plan 11;
 }
 else {
   plan 1;
@@ -29,5 +29,14 @@ my $o;
 $s.query("info", :out($o));
 $s.await-ready;
 ok $o ~~ /\d+\,\d+/, "Verified async .query method is working";
-
 lives-ok {$s.DESTROY}, "Can DESTROY by hand";
+($fn, $fh) = |tempfile;
+my $p = $fh.watch.Promise;
+$s = Proc::Screen.new(:shell[$*EXECUTABLE,
+                      $*SPEC.catdir($*PROGRAM-NAME.IO.dirname,
+                      "args.t"), "arg1", "arg2"]
+                      :rc["logfile $fn", "logfile flush 0", "deflog on"]);
+$s.start;
+$s.await-ready;
+await $p;
+is $fh.slurp-rest.chomp, "arg1 arg2", ":shell works";
