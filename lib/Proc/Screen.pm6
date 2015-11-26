@@ -250,7 +250,7 @@ multi method query (::?CLASS:D: $command, *@args, :$out! is rw) {
   self.await-ready;
   my $cmd = Proc::Async.new(:$.path,
     :args['-S', "$!screen-pid.$.sessionname", '-Q', $command, |@args], :$out);
-  $cmd.stdout.tap(-> $s { $out ~= $s });
+  $cmd.stdout(:bin).tap(-> $s { $out ~= $s.decode('ascii') });
   $!pro = $cmd.start();
 }
 
@@ -262,12 +262,12 @@ multi method query (::?CLASS:D: $command, *@args) returns Str {
     :args['-S', "$!screen-pid.$.sessionname", '-Q', $command, |@args]);
   my $c = Channel.new;
   (supply {
-    whenever $cmd.stdout -> $s {
+    whenever $cmd.stdout(:bin) -> $s {
       $c.send($s);
     };
     $!pro = $cmd.start }
   ).Promise.then({$c.close});
-  $c.join;
+  ($c».decode('ascii')).join;
 }
 
 # Eventually we may be providing programmatic management of screenrc
