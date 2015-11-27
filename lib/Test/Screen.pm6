@@ -1,4 +1,4 @@
-unit class Test::Screen;
+unit class Test::Screen:auth<skids>:ver<0.0.1>;
 
 use Test;
 use Proc::Screen;

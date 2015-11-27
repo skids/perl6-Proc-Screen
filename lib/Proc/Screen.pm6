@@ -23,7 +23,7 @@
 =end SYNOPSIS
 
 #| Each instance of Proc::Screen corresponds to one screen "session."
-unit class Proc::Screen is Proc::Async;
+unit class Proc::Screen:auth<skids>:ver<0.0.1> is Proc::Async;
 
 use File::Temp;
 
