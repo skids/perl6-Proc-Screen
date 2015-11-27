@@ -22,7 +22,7 @@ our %test-screenrcs =  :utf8["defutf8 on"], :utf8alt["defutf8 on","altscreen on"
 #| containing the desired command and arguments.  If different commands
 #| are desired per screen, set $test-screen-shell to a hash of arrays
 #| using the same keys as %test-screenrcs.
-our $test-screen-shell = ["sh"];
+our $test-screen-shell is export = ["sh"];
 
 #| The session IDs for all the screens being tested are stored here.
 our %test-screens is export;
@@ -71,7 +71,8 @@ our sub restart-screens is export {
     my @shell = $test-screen-shell ~~ Hash ??
       $test-screen-shell{$sn}.list !! $test-screen-shell.list;
     die "Need to specify shell for screen '$sn'" unless @shell;
-    %test-screens{$sn} = Proc::Screen.new(:rc[$rc.list] :@shell);
+    %test-screens{$sn} = Proc::Screen.new(:sessionname<Test::Screen> 
+                                          :rc[$rc.list] :@shell);
     %test-screens{$sn}.start;
   }
 }
