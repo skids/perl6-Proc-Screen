@@ -8,4 +8,4 @@ $test-screen-shell = [$*EXECUTABLE,
                       "arg1", "arg2"];
 start-screens;
 sleep 4; # TODO ipc to speed this up.
-row-matches 0, "arg1 arg2", "single $test-screen-shell, start-screens and row-matches work.";
+row-matches 0, "arg1 arg2", 'single $test-screen-shell, start-screens and row-matches work.';
