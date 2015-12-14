@@ -31,7 +31,7 @@ $s.await-ready;
 ok $o ~~ /\d+\,\d+/, "Verified async .query method is working";
 lives-ok {$s.DESTROY}, "Can DESTROY by hand";
 ($fn, $fh) = |tempfile;
-my $p = $fh.watch.Promise;
+my $p = $fh.watch.head(1).Promise;
 $s = Proc::Screen.new(:shell[$*EXECUTABLE,
                       $*SPEC.catdir($*PROGRAM-NAME.IO.dirname,
                       "args.t"), "arg1", "arg2"]

@@ -72,10 +72,10 @@ has $.screen-pid; # The PID that eventually is used for session naming
 has Str $.sessionname;   # Something to make our sessions stand out
 
 # XXX for some reason, things blow up when rcfh or pidfh are made private
-has Str $!rcfn;          # Our adhoc rcfile, until it is no longer needed
+has Str $.rcfn;          # Our adhoc rcfile, until it is no longer needed
 has IO::Handle $.rcfh;     
 
-has Str $!pidfn;         # Screen hands us its PID via this file
+has Str $.pidfn;         # Screen hands us its PID via this file
 has IO::Handle $.pidfh;    
 
 # Emulates the logic to find the right .screenrc, hopefully well enough.
@@ -103,9 +103,8 @@ method new(::?CLASS:U: *%iv is copy) {
   # Set up files to trampoline the screenrc and to receive the PID
   # XXX File::Temp might want to consider GLRization of return values
   %iv<rcfn rcfh pidfn pidfh> = |tempfile, |tempfile;
-
   %iv<rc> //= ("source " ~ ::?CLASS.screenrc(),);
- 
+
   # Inject commands to get the PID, so we can match the session
   %iv<rcfh>.print(sprintf(Q:to<EORC>, %iv<pidfn>, %iv<rc>.join("\n")));
     eval 'register . "$PID"' 'writebuf %s' 'register . ""'
@@ -121,7 +120,7 @@ method start (::?CLASS:D:) {
   fail "Tried to .start {self.WHAT.^name} which was already started"
     if $!pro.defined;
   # Begin to watch the file where the PID will get dumped.
-  $!screen-pid = $!pidfh.watch.Promise.then: -> $res {
+  $!screen-pid = $!pidfh.watch.head(1).Promise.then: -> $res {
     if $res.result.WHAT === IO::Notification::Change {
       $!screen-pid = $!pidfh.slurp-rest;
       self.clean-old-files;
