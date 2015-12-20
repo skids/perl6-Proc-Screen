@@ -110,8 +110,8 @@ method new(::?CLASS:U: *%iv is copy) {
     eval 'register . "$PID"' 'writebuf %s' 'register . ""'
     %s
     EORC
-  %iv<args> = [ '-q', '-c', %iv<rcfn>, '-S', %iv<sessionname>,
-                '-d', '-m', |(%iv<shell> with %iv<shell>) ];
+  %iv<args> := [ '-q', '-c', %iv<rcfn>, '-S', %iv<sessionname>,
+                 '-d', '-m', |(%iv<shell> with %iv<shell>) ];
   nextwith(|%iv);
 }
 
@@ -259,13 +259,15 @@ multi method query (::?CLASS:D: $command, *@args) returns Str {
   self.await-ready;
   my $cmd = Proc::Async.new(:$.path,
     :args['-S', "$!screen-pid.$.sessionname", '-Q', $command, |@args]);
+  # Probably overwrought but will refactor eveything once File::Temp has pipes
   my $c = Channel.new;
   (supply {
     whenever $cmd.stdout(:bin) -> $s {
       $c.send($s);
+      emit("junk");
     };
     $!pro = $cmd.start }
-  ).Promise.then({$c.close});
+  ).head.Promise.then({$c.close});
   ($c».decode('ascii')).join;
 }
 
