@@ -101,8 +101,12 @@ sub screen-keystrokes (*@keystrokes) is export {
 
 sub get-hardcopies (:$inscrollback = False; :$onscreen = True) is export {
   my %res;
+  for tested-screens() -> $sn, $ss {
+      %res{$sn} := $ = Nil;
+  }
   await (for tested-screens() -> $sn, $ss {
     start {
+      my $sr := %res{$sn};
       my $info = $ss.query('info');
       my ($fn, $fh) = |tempfile();
       $info ~~ m|\( \d+ \, \d+ \) \/ \( \d+ \, (\d+) \) \+ (\d+)|;
@@ -112,13 +116,10 @@ sub get-hardcopies (:$inscrollback = False; :$onscreen = True) is export {
       await Promise.anyof($p, Promise.in(5));
       my $output = $fh.slurp-rest;
       if ($output.chars) {
-        %res{$sn} = $output.lines;
+        $sr = $output.lines;
         if $inscrollback and not $onscreen {
-          %res{$sn} = %res{$sn}[0..^$scrollback];
+          $sr = $sr[0..^$scrollback];
         }
-      }
-      else {
-        %res{$sn} = Nil;
       }
       $fn.IO.unlink;
     }
