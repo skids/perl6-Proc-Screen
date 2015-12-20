@@ -111,7 +111,7 @@ sub get-hardcopies (:$inscrollback = False; :$onscreen = True) is export {
       my ($fn, $fh) = |tempfile();
       $info ~~ m|\( \d+ \, \d+ \) \/ \( \d+ \, (\d+) \) \+ (\d+)|;
       my ($height, $scrollback) = +«$/[0,1];
-      my $p = $fh.watch.Promise;
+      my $p = $fh.watch.head.Promise;
       $ss.command("hardcopy", ("-h" if $inscrollback), $fn);
       await Promise.anyof($p, Promise.in(5));
       my $output = $fh.slurp-rest;
