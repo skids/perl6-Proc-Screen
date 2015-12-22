@@ -70,6 +70,7 @@ our sub restart-screens is export {
   }:kv -> $sn, $rc {
     my @shell = $test-screen-shell ~~ Hash ??
       $test-screen-shell{$sn}.list !! $test-screen-shell.list;
+    @shell = ~«@shell;
     die "Need to specify shell for screen '$sn'" unless @shell;
     %test-screens{$sn} = Proc::Screen.new(:sessionname<Test::Screen> 
                                           :rc[$rc.list] :@shell);
