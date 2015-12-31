@@ -17,8 +17,8 @@ perl: v6.0.0
 provides:
   Proc::Screen: lib/Proc/Screen.pm6
   Test::Screen: lib/Test/Screen.pm6
-source-url: git://github.com/skids/perl6-Proc-Screen.git
+source-url: https://github.com/skids/perl6-Proc-Screen.git
 support:
-  source: git://github.com/skids/perl6-Proc-Screen.git
+  source: https://github.com/skids/perl6-Proc-Screen.git
   bugtracker: https://github.com/skids/perl6-Proc-Screen/issues
 version: v0.0.1
