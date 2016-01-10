@@ -13,7 +13,7 @@ test-depends:
 description: Perl6 -- manage GNU screen sessions and use them for tests
 license: http://www.perlfoundation.org/artistic_license_2_0
 name: Proc::Screen
-perl: v6.0.0
+perl: 6
 provides:
   Proc::Screen: lib/Proc/Screen.pm6
   Test::Screen: lib/Test/Screen.pm6
