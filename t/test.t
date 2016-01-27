@@ -2,7 +2,16 @@ use v6;
 use lib <blib/lib lib>;
 use Test::Screen;
 use Test;
-plan 1;
+
+if run "screen", "-ls", :out {
+  plan 1;
+}
+else {
+  plan 1;
+  ok 1, "Skipping tests since 'screen' not installed or not in path";
+  exit;
+}
+
 $test-screen-shell = [$*EXECUTABLE,
                       $*SPEC.catdir($*PROGRAM-NAME.IO.dirname, "args.t"),
                       "arg1", "arg2"];
