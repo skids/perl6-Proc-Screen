@@ -7,14 +7,10 @@ install:
 script:
   # Once with screen installed
   - sudo apt-get install -y screen
-  - which screen
-  - screen --version
   - PERL6LIB=$PWD/blib/lib prove -e perl6 -r t/
   # And once again after compilation
   - PERL6LIB=$PWD/blib/lib prove -e perl6 -r t/
-  - PERL6LIB=$PWD/blib/lib#$PWD/lib perl6 -e 'use lib "./lib"; use Proc::Screen; my $s = Proc::Screen.new; $s.start; say qx{screen -list}; $s.rcfn.IO.lines.say; try { $s.await-ready }; $s.perl.say; sleep 1;'
   # And once again with gnu screen unavailable
   - sudo apt-get remove -y screen
-  - which screen
   - PERL6LIB=$PWD/blib/lib prove -e perl6 -r t/
 sudo: true
